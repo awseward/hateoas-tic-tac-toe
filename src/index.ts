@@ -3,6 +3,7 @@ import express from 'express'
 import expressWinston from 'express-winston';
 import winston from 'winston';
 import { HasLinks, _links } from './links';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Req<T> extends express.Request { body: T }
 type Res<T> = express.Response<T, Record<string, any>>;
@@ -24,8 +25,8 @@ app.use(expressWinston.logger({
 app.use(cors());
 
 type NewGame = { id: string } & HasLinks<'start'|'invite'>;
-app.get('/games/new', async (req: Req<void>, res: Res<NewGame>) => {
-  const uuid = '4625e7d5-e8a7-411b-9762-349386a5750e';
+app.get('/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
+  const uuid = uuidv4();
   ok(res, {
     id: uuid,
     ..._links({
