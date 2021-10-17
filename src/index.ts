@@ -30,10 +30,12 @@ app.use(signing.middleware({ exemptPaths: ['/api/games/new'] }));
 
 const mkHref = (pathAndQuery: string) => `{+authority}${signing.sign(pathAndQuery)}`;
 
-type NewGame = { gameId: string, playerId: string } & HasLinks<'start'|'yield'>;
+type PlayerId = 'A' | 'B';
+type NewGame = { gameId: string, playerId: PlayerId } & HasLinks<'start'|'yield'>;
+
 app.get('/api/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
   const gameId = ulid();
-  const playerId = 'A';
+  const playerId: PlayerId = 'A';
 
   ok(res, {
     gameId,
