@@ -1,12 +1,11 @@
 import cors from 'cors';
-import express from 'express'
+import express from 'express';
 import expressWinston from 'express-winston';
 import winston from 'winston';
-import { HasLinks, _links } from './links';
 import { v4 as uuidv4 } from 'uuid';
 
-import hmacSHA256 from 'crypto-js/hmac-sha256';
-import Base64 from 'crypto-js/enc-base64';
+import { HasLinks, _links } from './links';
+import requestSigning from './signing';
 
 interface Req<T> extends express.Request { body: T }
 type Res<T> = express.Response<T, Record<string, any>>;
@@ -16,8 +15,9 @@ function ok<T>(res: Res<T>, body: T) {
 
 const app = express();
 const port = 5001;
-app.use(express.json());
+const signing = requestSigning('__FIXME__');
 
+app.use(express.json());
 app.use(expressWinston.logger({
   transports: [
     new winston.transports.Console()
@@ -26,52 +26,9 @@ app.use(expressWinston.logger({
   meta: true,
 }));
 app.use(cors());
+app.use(signing.middleware({ exemptPaths: ['/games/new'] }));
 
-const secret = '__SECRET__';
-
-const base64HMAC = (str: string) =>
-  Base64.stringify(hmacSHA256(str, secret))
-    // Signatures need to be URL-safe, and I couldn't get
-    // `crypto-js/enc-base64url` to actually import 🤷
-    .replace('=', '')
-    .replace('+', '-')
-    .replace('/', '_');
-
-const calculateSignature = (uri: string) => {
-  const parsedURL = new URL(uri, 'https://__placeholder__');
-  parsedURL.searchParams.delete('_sig');
-  return base64HMAC(parsedURL.pathname + parsedURL.search);
-}
-
-const signPathAndQuery = (pAndQ: string) => {
-  const parsedURL = new URL(pAndQ, 'https://__placeholder__');
-  if (parsedURL.searchParams.has('_sig')) {
-    throw new Error('Attempted to sign where signature is already present.');
-  }
-  const sig = base64HMAC(parsedURL.pathname + parsedURL.search);
-  parsedURL.searchParams.append('_sig', sig);
-  return parsedURL.pathname + parsedURL.search;
-}
-
-const mkHref = (pathAndQuery: string) => `{+authority}${signPathAndQuery(pathAndQuery)}`
-
-app.use(function (req, res, next) {
-  if (req.path !== '/games/new') {
-    const sig = req.query['_sig'] as string; // Probably should revisit this…
-    if (!sig) {
-      res.status(404).send({ error: 'Missing required signature' });
-      return;
-    }
-    const calculatedSig = calculateSignature(req.originalUrl);
-
-    if (sig !== calculatedSig) {
-      res.status(404).send({ error: 'Signature mismatch' });
-      return;
-    }
-  }
-
-  next();
-})
+const mkHref = (pathAndQuery: string) => `{+authority}${signing.sign(pathAndQuery)}`;
 
 type NewGame = { id: string } & HasLinks<'start'|'invite'>;
 app.get('/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
