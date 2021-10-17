@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import expressWinston from 'express-winston';
+import path from 'path';
 import winston from 'winston';
 import { ulid } from 'ulid'
 
@@ -14,7 +15,7 @@ function ok<T>(res: Res<T>, body: T) {
 }
 
 const app = express();
-const port = 5001;
+const port = process.env.PORT || 5000;
 const signing = requestSigning('__FIXME__');
 
 app.use(express.json());
@@ -26,7 +27,8 @@ app.use(expressWinston.logger({
   meta: true,
 }));
 app.use(cors());
-app.use(signing.middleware({ exemptPaths: ['/api/games/new'] }));
+app.use(express.static('public'));
+app.use(signing.middleware({ exemptPaths: ['/', '/api/games/new'] }));
 
 const mkHref = (pathAndQuery: string) => `{+authority}${signing.sign(pathAndQuery)}`;
 
@@ -59,6 +61,10 @@ app.get('/api/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
 
 app.get('/games/:uuid', async(req, res) => {
   res.status(501).send('TODO');
+});
+
+app.get('*', (_req, res) => {
+   res.sendFile(path.resolve(__dirname, '..', 'public', 'index.html'));
 });
 
 app.listen(port, () => console.log(`Running on port ${port}`));
