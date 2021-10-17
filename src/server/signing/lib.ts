@@ -13,7 +13,13 @@ export const calculateSignature = (signingKey: string) => (uri: string) => {
   const parsedURL = new URL(uri, 'https://__placeholder__');
   parsedURL.searchParams.delete('_sig');
 
-  return base64HMAC(parsedURL.pathname + parsedURL.search, signingKey);
+  const path = parsedURL.pathname;
+  const normalizedPath = path.startsWith('/api')
+    ? path.slice(4)
+    : path
+  const queryString = parsedURL.search;
+
+  return base64HMAC(normalizedPath + queryString, signingKey);
 }
 
 export const signPathAndQuery = (signingKey: string) => (pathAndQuery: string) => {
@@ -21,7 +27,7 @@ export const signPathAndQuery = (signingKey: string) => (pathAndQuery: string) =
   if (parsedURL.searchParams.has('_sig')) {
     throw new Error('Attempted to sign where signature is already present.');
   }
-  const sig = base64HMAC(parsedURL.pathname + parsedURL.search, signingKey);
+  const sig = calculateSignature(signingKey)(parsedURL.pathname + parsedURL.search);
   parsedURL.searchParams.append('_sig', sig);
 
   return parsedURL.pathname + parsedURL.search;
