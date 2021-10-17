@@ -1,9 +1,11 @@
 import cors from 'cors';
-import express from 'express'
+import express from 'express';
 import expressWinston from 'express-winston';
 import winston from 'winston';
+import { ulid } from 'ulid'
+
 import { HasLinks, _links } from './links';
-import { v4 as uuidv4 } from 'uuid';
+import requestSigning from './signing';
 
 interface Req<T> extends express.Request { body: T }
 type Res<T> = express.Response<T, Record<string, any>>;
@@ -13,8 +15,9 @@ function ok<T>(res: Res<T>, body: T) {
 
 const app = express();
 const port = 5001;
-app.use(express.json());
+const signing = requestSigning('__FIXME__');
 
+app.use(express.json());
 app.use(expressWinston.logger({
   transports: [
     new winston.transports.Console()
@@ -23,27 +26,37 @@ app.use(expressWinston.logger({
   meta: true,
 }));
 app.use(cors());
+app.use(signing.middleware({ exemptPaths: ['/api/games/new'] }));
 
-type NewGame = { id: string } & HasLinks<'start'|'invite'>;
-app.get('/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
-  const uuid = uuidv4();
+const mkHref = (pathAndQuery: string) => `{+authority}${signing.sign(pathAndQuery)}`;
+
+type NewGame = { gameId: string, playerId: string } & HasLinks<'start'|'yield'>;
+app.get('/api/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
+  const gameId = ulid();
+  const playerId = 'A';
+
   ok(res, {
-    id: uuid,
+    gameId,
+    playerId,
     ..._links({
       start: {
-        href: `{+authority}/games/${uuid}/start`,
+        href: mkHref(`/games/${gameId}?firstMove=${playerId}`),
         method: 'GET',
-        title: 'Start this game by making the first move',
+        title: 'Make the first move',
         templated: true
       },
-      invite: {
-        href: `{+authority}/games/${uuid}/invite`,
+      yield: {
+        href: mkHref(`/games/${gameId}`),
         method: 'GET',
-        title: 'Share this link with someone else to invite them to make the first move',
+        title: 'Share this link to allow your opponent to make the first move',
         templated: true,
       },
     })
   });
+});
+
+app.get('/games/:uuid', async(req, res) => {
+  res.status(501).send('TODO');
 });
 
 app.listen(port, () => console.log(`Running on port ${port}`));
