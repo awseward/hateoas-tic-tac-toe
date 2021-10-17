@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import expressWinston from 'express-winston';
 import winston from 'winston';
-import { v4 as uuidv4 } from 'uuid';
+import { ulid } from 'ulid'
 
 import { HasLinks, _links } from './links';
 import requestSigning from './signing';
@@ -26,40 +26,37 @@ app.use(expressWinston.logger({
   meta: true,
 }));
 app.use(cors());
-app.use(signing.middleware({ exemptPaths: ['/games/new'] }));
+app.use(signing.middleware({ exemptPaths: ['/api/games/new'] }));
 
 const mkHref = (pathAndQuery: string) => `{+authority}${signing.sign(pathAndQuery)}`;
 
-type NewGame = { id: string } & HasLinks<'start'|'invite'>;
-app.get('/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
-  const uuid = uuidv4();
+type NewGame = { id: string } & HasLinks<'start'|'yield'>;
+app.get('/api/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
+  const gameId = ulid();
+  const playerId = 'A';
 
   ok(res, {
-    id: uuid,
+    id: gameId,
+    player_id: playerId,
     ..._links({
       start: {
-        href: mkHref(`/games/${uuid}/start?foo=bar`),
+        href: mkHref(`/games/${gameId}?first_move=${playerId}`),
         method: 'GET',
-        title: 'Start this game by making the first move',
+        title: 'Make the first move',
         templated: true
       },
-      invite: {
-        href: mkHref(`/games/${uuid}/invite?foo=bar`),
+      yield: {
+        href: mkHref(`/games/${gameId}`),
         method: 'GET',
-        title: 'Share this link with someone else to invite them to make the first move',
+        title: 'Share this link to allow your opponent to make the first move',
         templated: true,
       },
     })
   });
 });
 
-app.get('/games/:uuid/invite', async(req, res) => {
+app.get('/games/:uuid', async(req, res) => {
   res.status(501).send('TODO');
 });
-
-app.get('/games/:uuid/start', async(req, res) => {
-  res.status(501).send('TODO');
-});
-
 
 app.listen(port, () => console.log(`Running on port ${port}`));
