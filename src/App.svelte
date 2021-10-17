@@ -20,8 +20,13 @@
     }
   }
 
+  function link(game: NewGame, fn: ((g: NewGame) => Link)): Link {
+    return game ? handleLink(fn(game)) : undefined;
+  }
+
   let game: NewGame;
-  $: startLink = game ? handleLink(game._links.start) : undefined;
+  $: startLink = link(game, g => g._links.start);
+  $: yieldLink = link(game, g => g._links.yield);
 
   const { get } = axios;
 
@@ -30,9 +35,14 @@
 
 <main>
   <h1>HATEOAS Tic-Tac-Toe</h1>
-  <p>Visit the <a href="https://svelte.dev/tutorial">Svelte tutorial</a> to learn how to build Svelte apps.</p>
 
-  <a href={startLink?.href}>{startLink?.title}</a>
+  <div>
+    <a href={startLink?.href}>{startLink?.title}</a>
+  </div>
+  <hr/>
+  <div>
+    <a href={yieldLink?.href}>{yieldLink?.title}</a>
+  </div>
 </main>
 
 <style>
