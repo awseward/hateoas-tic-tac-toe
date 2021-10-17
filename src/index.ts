@@ -29,22 +29,49 @@ app.use(cors());
 
 const secret = '__SECRET__';
 
-const getSignature = (x: string) =>
-  Base64.stringify(hmacSHA256(x, secret))
+const base64HMAC = (str: string) =>
+  Base64.stringify(hmacSHA256(str, secret))
     // Signatures need to be URL-safe, and I couldn't get
     // `crypto-js/enc-base64url` to actually import 🤷
     .replace('=', '')
     .replace('+', '-')
     .replace('/', '_');
 
-const sign = (uri: string) => {
-  // There's a more robust way than this, but this is pretty fine for now…
-  const sep = uri.includes('?') ? ';' : '?';
-  return `${uri}${sep}_sig=${getSignature(uri)}`;
+const calculateSignature = (uri: string) => {
+  const parsedURL = new URL(uri, 'https://__placeholder__');
+  parsedURL.searchParams.delete('_sig');
+  return base64HMAC(parsedURL.pathname + parsedURL.search);
 }
 
-const mkHref = (pathAndQuery: string) =>
-  sign(`{+authority}${sign(pathAndQuery)}`)
+const signPathAndQuery = (pAndQ: string) => {
+  const parsedURL = new URL(pAndQ, 'https://__placeholder__');
+  if (parsedURL.searchParams.has('_sig')) {
+    throw new Error('Attempted to sign where signature is already present.');
+  }
+  const sig = base64HMAC(parsedURL.pathname + parsedURL.search);
+  parsedURL.searchParams.append('_sig', sig);
+  return parsedURL.pathname + parsedURL.search;
+}
+
+const mkHref = (pathAndQuery: string) => `{+authority}${signPathAndQuery(pathAndQuery)}`
+
+app.use(function (req, res, next) {
+  if (req.path !== '/games/new') {
+    const sig = req.query['_sig'] as string; // Probably should revisit this…
+    if (!sig) {
+      res.status(404).send({ error: 'Missing required signature' });
+      return;
+    }
+    const calculatedSig = calculateSignature(req.originalUrl);
+
+    if (sig !== calculatedSig) {
+      res.status(404).send({ error: 'Signature mismatch' });
+      return;
+    }
+  }
+
+  next();
+})
 
 type NewGame = { id: string } & HasLinks<'start'|'invite'>;
 app.get('/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
@@ -54,13 +81,13 @@ app.get('/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
     id: uuid,
     ..._links({
       start: {
-        href: mkHref(`/games/${uuid}/start`),
+        href: mkHref(`/games/${uuid}/start?foo=bar`),
         method: 'GET',
         title: 'Start this game by making the first move',
         templated: true
       },
       invite: {
-        href: mkHref(`/games/${uuid}/invite`),
+        href: mkHref(`/games/${uuid}/invite?foo=bar`),
         method: 'GET',
         title: 'Share this link with someone else to invite them to make the first move',
         templated: true,
@@ -68,5 +95,14 @@ app.get('/games/new', async (_req: Req<void>, res: Res<NewGame>) => {
     })
   });
 });
+
+app.get('/games/:uuid/invite', async(req, res) => {
+  res.status(501).send('TODO');
+});
+
+app.get('/games/:uuid/start', async(req, res) => {
+  res.status(501).send('TODO');
+});
+
 
 app.listen(port, () => console.log(`Running on port ${port}`));
