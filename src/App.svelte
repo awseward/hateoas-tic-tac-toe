@@ -26,7 +26,7 @@
 </script>
 
 <main>
-  <h1>Uhhhh…</h1>
+  <h1>Tic Tac Toe</h1>
 
   {#each links as link}
     <div class="link-container">
@@ -34,16 +34,20 @@
     </div>
   {/each}
 
-  <pre style="text-align: left">{
-    JSON.stringify(
-      {
-        links,
-        state,
-      },
-      null,
-      2
-    )
-  }</pre>
+  <hr />
+
+  <details>
+    <!-- <summary>…</summary> -->
+    <pre class="under-the-hood">{
+      JSON.stringify(
+        {
+          state,
+        },
+        null,
+        2
+      )
+    }</pre>
+  </details>
 </main>
 
 <style>
@@ -56,8 +60,22 @@
   h1 {
     color: #ff3e00;
     text-transform: uppercase;
-    font-size: 4em;
+    font-size: 2em;
     font-weight: 100;
+  }
+
+  details {
+    margin-top: 20px;
+  }
+
+  .link-container {
+    margin-bottom: 20px;
+  }
+
+  .under-the-hood {
+    background: #EEE;
+    padding: 10px;
+    margin-top: 10px;
   }
 
   @media (min-width: 640px) {

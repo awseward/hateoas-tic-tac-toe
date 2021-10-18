@@ -14,7 +14,7 @@ export interface HasLinks<Rel extends string> {
   _links: Links<Rel>;
 }
 
-type SansRel = Omit<Link, 'rel'>;
+export type SansRel = Omit<Link, 'rel'>;
 
 type SansRels<Rel extends string> = Record<Rel, SansRel>
 

@@ -5,7 +5,7 @@ import path from 'path';
 import winston from 'winston';
 import { ulid } from 'ulid'
 
-import { HasLinks, _links } from './links';
+import { HasLinks, SansRel, _links } from './links';
 import requestSigning from './signing';
 
 interface Req<T> extends express.Request { body: T }
@@ -32,6 +32,12 @@ app.use(signing.middleware({ exemptPaths: ['/', '/api'] }));
 
 const mkHref = (pathAndQuery: string) => `{+authority}${signing.sign(pathAndQuery)}`;
 
+const reset: SansRel = {
+  href: '/',
+  method: 'GET',
+  title: "I would like to start over from the beginning",
+}
+
 type PlayerId = 'X' | 'O';
 function getOpponentId(playerId: PlayerId) {
   switch(playerId) {
@@ -54,27 +60,28 @@ app.get('/api', (_req: Req<void>, res: Res<HasLinks<'chooseX'|'chooseO'>>) => {
       chooseX: {
         href: mkHref('/player/X/games/new'),
         method: 'GET',
-        title: 'I will be X',
+        title: 'I choose X',
         templated: true
       },
       chooseO: {
         href: mkHref('/player/O/games/new'),
         method: 'GET',
-        title: 'I will be O',
+        title: 'I choose O',
         templated: true
       }
     }),
   });
 });
 
-type NewGame = HasLinks<'start'|'yield'> & Game;
-app.get('/api/player/:playerId/games/new', (req: Req<void>, res: Res<NewGame>) => {
+// type NewGame = HasLinks<'start'|'yield'> & Game;
+app.get('/api/player/:playerId/games/new', (req: Req<void>, res: Res<HasLinks<'start'|'yield'>>) => {
   const gameId = ulid();
   const playerId = req.params.playerId as PlayerId; // 😬
   const opponentId = getOpponentId(playerId);
 
   ok(res, {
     ..._links({
+      reset,
 
       start: {
         href: mkHref(`/player/${playerId}/game/${gameId}?active=${playerId}`),
@@ -90,18 +97,35 @@ app.get('/api/player/:playerId/games/new', (req: Req<void>, res: Res<NewGame>) =
         templated: true,
       },
     }),
-
-    gameId,
-    opponentId,
-    playerId,
   });
 });
 
-// /api/player/X/game/01FJ89YA054AMKETX6TY42HDC0?active=O&_sig=2770bIoHoJy6h6JBY6rfJrvOJIs
+// This is essentially the "game loop"; what that looks like:
+// - deserialize the state from the query params
+// - render the correct links / state accordingly
 app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) => {
   const playerId: PlayerId = req.params.playerId as PlayerId; // 😬
   const gameId = req.params.gameId;
   const activePlayerId = req.query.active as PlayerId; // 😬
+
+  const isYourTurn = playerId === activePlayerId;
+
+  if (isYourTurn) {
+    ok(res, {
+      ..._links({
+        reset,
+      }),
+      TODO: 'Need to implement the actual game now!'
+    });
+  } else {
+    ok(res, {
+      ..._links({
+        reset,
+      }),
+      TODO: 'Need to implement the actual game now!'
+    });
+  }
+
 
   ok(res, {
     yourTurn: playerId === activePlayerId,
