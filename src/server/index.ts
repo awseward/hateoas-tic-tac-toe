@@ -15,7 +15,7 @@ function ok<T>(res: Res<T>, body: T) {
 }
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5001;
 const signing = requestSigning('__FIXME__');
 
 app.use(express.json());
@@ -114,6 +114,11 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
     ok(res, {
       ..._links({
         reset,
+        todo: {
+          href: '#',
+          method: 'GET',
+          title: 'TODO: Implement the next step(s)'
+        },
       }),
       TODO: 'Need to implement the actual game now!'
     });
@@ -121,6 +126,11 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
     ok(res, {
       ..._links({
         reset,
+        todo: {
+          href: '#',
+          method: 'GET',
+          title: 'TODO: Implement the next step(s)'
+        },
       }),
       TODO: 'Need to implement the actual game now!'
     });
