@@ -36,7 +36,7 @@
 
   <hr />
 
-  <details>
+  <details open>
     <!-- <summary>…</summary> -->
     <pre class="under-the-hood">{
       JSON.stringify(
