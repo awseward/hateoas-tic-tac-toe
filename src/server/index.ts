@@ -5,8 +5,10 @@ import path from 'path';
 import winston from 'winston';
 import { ulid } from 'ulid'
 
-import { HasLinks, SansRel, _links } from './links';
+import { HasLinks, Link, Links, SansRel, _links } from './links';
 import requestSigning from './signing';
+
+import { spaces, Space, EmptySpace, emptySpace, PlayerId, Board } from '../shared/types';
 
 interface Req<T> extends express.Request { body: T }
 type Res<T> = express.Response<T, Record<string, any>>;
@@ -38,22 +40,6 @@ const reset: SansRel = {
   title: "I would like to start over from the beginning",
 }
 
-type PlayerId = 'X' | 'O';
-function getOpponentId(playerId: PlayerId) {
-  switch(playerId) {
-    case 'O':
-      return 'X';
-    case 'X':
-      return 'O';
-  }
-}
-
-type Game = {
-  gameId: string,
-  playerId: PlayerId,
-  opponentId: PlayerId,
-};
-
 app.get('/api', (_req: Req<void>, res: Res<HasLinks<'chooseX'|'chooseO'>>) => {
   ok(res, {
     ..._links({
@@ -73,7 +59,6 @@ app.get('/api', (_req: Req<void>, res: Res<HasLinks<'chooseX'|'chooseO'>>) => {
   });
 });
 
-// type NewGame = HasLinks<'start'|'yield'> & Game;
 app.get('/api/player/:playerId/games/new', (req: Req<void>, res: Res<HasLinks<'start'|'yield'>>) => {
   const gameId = ulid();
   const playerId = req.params.playerId as PlayerId; // 😬
@@ -100,46 +85,161 @@ app.get('/api/player/:playerId/games/new', (req: Req<void>, res: Res<HasLinks<'s
   });
 });
 
+const wins =
+  // NOTE: There's probably some cool math that can figure this out instead,
+  // but it's such a small space that this is just fine.
+  [
+    // Horizontal
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    // Vertical
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    // Diagonal
+    [0, 4, 8],
+    [2, 4, 6]
+  ] as const;
+type Win = typeof wins[number]; // Not sure we actually need this.
+
+const isWinner = (spaces: Space[]) =>
+  wins.some(w => w.map(n => n as Space).every((space: Space) => spaces.includes(space)))
+
+export function getOpponentId(playerId: PlayerId) {
+  switch(playerId) {
+    case 'O':
+      return 'X';
+    case 'X':
+      return 'O';
+  }
+}
+
+const emptyBoard = () =>
+  spaces.reduce(
+    (board: Partial<Board>, space: Space) => {
+      board[space] = emptySpace;
+      return board;
+    },
+    {}
+  ) as Board;
+
+const mergeBoard = (base: Board) => (taken: Partial<Board>): Board => Object.assign({}, base, taken);
+const fillHoles = mergeBoard(emptyBoard());
+
+const getSpaces = (board: Board): Space[] => Object.keys(board).map(s => parseInt(s)) as Space[];
+const chooseSpaces = (value: PlayerId | '_') => (board: Board) => getSpaces(board).filter(s => board[s] === value);
+
+const getTakenSpaces = (board: Board, playerId: PlayerId) => chooseSpaces(playerId)(board);
+const getEmptySpaces = chooseSpaces(emptySpace);
+
+function parseBoard(req: express.Request): Board {
+  const taken_ = Object.assign({}, req.query.taken) as Record<string, PlayerId>;
+  const taken = Object.keys(taken_).reduce(
+    (pBoard: Partial<Board>, key) => {
+      const space = parseInt(key.replace('_', '')) as Space;
+      pBoard[space] = taken_[key];
+
+      return pBoard;
+    },
+    {}
+  );
+  return fillHoles(taken);
+}
+
+const renderTakenQueryParam = (board: Board) =>
+  getSpaces(board).reduce(
+    (kvps: string[], key: Space) => (board[key] === emptySpace)
+      ? kvps
+      : [...kvps, `taken[_${key}]=${board[key]}`]
+    ,
+    []
+  ).join('&');
+
+const mkTake =
+  (gameId: string, mergeBoard: (taken: Partial<Board>) => Board) =>
+  (playerId: PlayerId) =>
+  (space: Space): Link => {
+  return {
+    rel: `take${space}`,
+    href: mkHref(`/player/${playerId}/game/${gameId}?active=${getOpponentId(playerId)}&${renderTakenQueryParam(mergeBoard({ [space]: playerId }))}`),
+    method: 'GET',
+    title: `Take space ${space}`,
+    templated: true,
+  }
+};
+
+type TakeLinks = Partial<Links<'take0'|'take1'|'take2'|'take3'|'take4'|'take5'|'take6'|'take7'|'take8'>>
+const mkTakeLinks = (board: Board, mkTakeLink: (space: Space) => Link) =>
+  getEmptySpaces(board).reduce(
+    (links: TakeLinks, space) => Object.assign(links, { [`take${space}`]: mkTakeLink(space) }),
+    {}
+  );
+
 // This is essentially the "game loop"; what that looks like:
 // - deserialize the state from the query params
 // - render the correct links / state accordingly
 app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) => {
   const playerId: PlayerId = req.params.playerId as PlayerId; // 😬
+  const opponentId = getOpponentId(playerId);
   const gameId = req.params.gameId;
+
   const activePlayerId = req.query.active as PlayerId; // 😬
+  const board = parseBoard(req);
+  const activePlayerHasWon = isWinner(getTakenSpaces(board, activePlayerId));
 
-  const isYourTurn = playerId === activePlayerId;
+  const mkTake_ = mkTake(gameId, mergeBoard(board))
 
-  if (isYourTurn) {
-    ok(res, {
-      ..._links({
-        reset,
-        todo: {
+  const commonLinks = _links({ reset })._links;
+  const placeholderLinks = _links({
+    boardPlaceholder: {
+      href: '#',
+      method: 'GET',
+      title: '=== Pretend there is a board rendered here ==='
+    },
+    statusPlaceholder: {
+      href: '#',
+      method: 'GET',
+      title: `=== Active player: ${activePlayerId} ===`
+    },
+  })._links
+  const activePlayerHasWonLink =
+    activePlayerHasWon
+      ? _links({
+        winPlaceholder: {
           href: '#',
           method: 'GET',
-          title: 'TODO: Implement the next step(s)'
+          title: '=== Active player has won!!! ==='
         },
-      }),
-      TODO: 'Need to implement the actual game now!'
-    });
-  } else {
-    ok(res, {
-      ..._links({
-        reset,
-        todo: {
-          href: '#',
-          method: 'GET',
-          title: 'TODO: Implement the next step(s)'
+      })._links
+      : {};
+
+  switch(activePlayerId) {
+    case playerId:
+      ok(res, {
+        board,
+        _links: {
+          ...commonLinks,
+          ...placeholderLinks,
+          ...mkTakeLinks(board, mkTake_(playerId))
+        }
+      });
+      break;
+
+    case opponentId:
+      ok(res, {
+        board,
+        _links: {
+          ...commonLinks,
+          ...placeholderLinks,
+          ...mkTakeLinks(board, mkTake_(opponentId))
         },
-      }),
-      TODO: 'Need to implement the actual game now!'
-    });
+      });
+      break;
+
+    default:
+      res.status(500).send({ error: "This isn't supposed to happen…" });
   }
-
-
-  ok(res, {
-    yourTurn: playerId === activePlayerId,
-  });
 });
 
 app.get('/api/*', (_req, res) => {
