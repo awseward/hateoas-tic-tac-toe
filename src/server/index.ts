@@ -117,65 +117,17 @@ const emptyBoard = () =>
   ) as Board;
 
 
+
+
 const mergeBoard = (base: Board) => (taken: Partial<Board>): Board => Object.assign({}, base, taken);
 const fillHoles = mergeBoard(emptyBoard());
 
-const renderTakenQueryParam = (board: Board) =>
-  (Object.keys(board).map(s => parseInt(s)) as Space[])
-    .reduce(
-      (kvps: string[], key: Space) => (board[key] === emptySpace)
-        ? kvps
-        : [...kvps, `taken[_${key}]=${board[key]}`]
-      ,
-      []
-    ).join('&');
+const getSpaces = (board: Board): Space[] => Object.keys(board).map(s => parseInt(s)) as Space[];
+const getEmptySpaces = (board: Board): Space[] => getSpaces(board).filter(s => board[s] === emptySpace);
 
-const mkTake = (gameId: string, playerId: PlayerId, board: Board) => (space: Space): Link => {
-  const mrgBrd = mergeBoard(board);
-  const b_: Partial<Board> = {};
-  b_[space] = playerId;
-  const newBoard = mrgBrd(b_);
-
-  return {
-    rel: `take${space}`,
-    href: mkHref(`/player/${playerId}/game/${gameId}?${renderTakenQueryParam(newBoard)}`),
-    method: 'GET',
-    title: `Take space ${space}`,
-    templated: true,
-  }
-};
-
-// const boardLinks = (board: Board): SansRel[] =>
-//   spaces.reduce(
-//     (links: SansRel[], index) => {
-//       const newLinks: SansRel[] = board[index] !== emptySpace
-//         ? links
-//         : [
-//             ...links, {
-//               href: mkHref(`FIXME/${index}`),
-//               method: 'GET',
-//               title: 'FIXME',
-//               templated: true,
-//             }
-//           ];
-//       return newLinks;
-//     },
-//     []
-//   );
-
-type TakeLinks = Partial<Links<'take0'|'take1'|'take2'|'take3'|'take4'|'take5'|'take6'|'take7'|'take8'>>
-
-// This is essentially the "game loop"; what that looks like:
-// - deserialize the state from the query params
-// - render the correct links / state accordingly
-app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) => {
-  const playerId: PlayerId = req.params.playerId as PlayerId; // 😬
-  const activePlayerId = req.query.active as PlayerId; // 😬
-  const opponentId = getOpponentId(playerId);
-  const gameId = req.params.gameId;
-
+function parseBoard(req: express.Request): Board {
   const taken_ = Object.assign({}, req.query.taken) as Record<string, PlayerId>;
-  const taken: Partial<Board> = Object.keys(taken_).reduce(
+  const taken = Object.keys(taken_).reduce(
     (pBoard: Partial<Board>, key) => {
       const space = parseInt(key.replace('_', '')) as Space;
       pBoard[space] = taken_[key];
@@ -184,91 +136,91 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
     },
     {}
   );
+  return fillHoles(taken);
+}
 
-  const board = fillHoles(taken);
+const renderTakenQueryParam = (board: Board) =>
+  getSpaces(board).reduce(
+    (kvps: string[], key: Space) => (board[key] === emptySpace)
+      ? kvps
+      : [...kvps, `taken[_${key}]=${board[key]}`]
+    ,
+    []
+  ).join('&');
 
-  if (playerId === activePlayerId) {
-    const mkTake_ = mkTake(gameId, playerId, board);
-    const takeLinks: TakeLinks = {
-      // FIXME: Generate links only for the available spaces
-      take0: mkTake_(0),
-      take1: mkTake_(1),
-      take2: mkTake_(2),
-      take3: mkTake_(3),
-      take4: mkTake_(4),
-      take5: mkTake_(5),
-      take6: mkTake_(6),
-      take7: mkTake_(7),
-      take8: mkTake_(8),
-    };
-
-    ok(res, {
-      taken,
-      board,
-      ...Object.assign(
-        {},
-        _links({
-          reset,
-
-          boardPlaceholder: {
-            href: '#',
-            method: 'GET',
-            title: '=== Pretend there is a board rendered here. ==='
-          },
-          statusPlaceholder: {
-            href: '#',
-            method: 'GET',
-            title: '=== IT IS YOUR TURN ==='
-          },
-        }),
-        takeLinks
-      ),
-    });
-  } else {
-    const mkTake_ = mkTake(gameId, opponentId, board);
-    const takeLinks: TakeLinks = {
-      // FIXME: Generate links only for the available spaces
-      take0: mkTake_(0),
-      take1: mkTake_(1),
-      take2: mkTake_(2),
-      take3: mkTake_(3),
-      take4: mkTake_(4),
-      take5: mkTake_(5),
-      take6: mkTake_(6),
-      take7: mkTake_(7),
-      take8: mkTake_(8),
-    };
-
-    ok(res, {
-      taken,
-      board,
-
-      ...Object.assign(
-        {},
-        _links({
-          reset,
-
-          boardPlaceholder: {
-            href: '#',
-            method: 'GET',
-            title: '=== Pretend there is a board rendered here. ==='
-          },
-
-          statusPlaceholder: {
-            href: '#',
-            method: 'GET',
-            title: "=== PLEASE WAIT; IT IS YOUR OPPONENT'S TURN ==="
-          },
-      }),
-      takeLinks
-      ),
-    });
+const mkTake =
+  (gameId: string, mergeBoard: (taken: Partial<Board>) => Board) =>
+  (playerId: PlayerId) =>
+  (space: Space): Link => {
+  return {
+    rel: `take${space}`,
+    href: mkHref(`/player/${playerId}/game/${gameId}?active=${getOpponentId(playerId)}&${renderTakenQueryParam(mergeBoard({ [space]: playerId }))}`),
+    method: 'GET',
+    title: `Take space ${space}`,
+    templated: true,
   }
+};
 
+type TakeLinks = Partial<Links<'take0'|'take1'|'take2'|'take3'|'take4'|'take5'|'take6'|'take7'|'take8'>>
+const mkTakeLinks = (board: Board, mkTakeLink: (space: Space) => Link) =>
+  getEmptySpaces(board).reduce(
+    (links: TakeLinks, space) => Object.assign(links, { [`take${space}`]: mkTakeLink(space) }),
+    {}
+  );
 
-  ok(res, {
-    yourTurn: playerId === activePlayerId,
-  });
+// This is essentially the "game loop"; what that looks like:
+// - deserialize the state from the query params
+// - render the correct links / state accordingly
+app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) => {
+  const playerId: PlayerId = req.params.playerId as PlayerId; // 😬
+  const opponentId = getOpponentId(playerId);
+  const gameId = req.params.gameId;
+
+  const activePlayerId = req.query.active as PlayerId; // 😬
+  const board = parseBoard(req);
+
+  const mkTake_ = mkTake(gameId, mergeBoard(board))
+
+  const commonLinks = _links({ reset })._links;
+  const placeholderLinks = _links({
+    boardPlaceholder: {
+      href: '#',
+      method: 'GET',
+      title: '=== Pretend there is a board rendered here ==='
+    },
+    statusPlaceholder: {
+      href: '#',
+      method: 'GET',
+      title: `=== Active player: ${activePlayerId} ===`
+    },
+  })._links
+
+  switch(activePlayerId) {
+    case playerId:
+      ok(res, {
+        board,
+        _links: {
+          ...commonLinks,
+          ...placeholderLinks,
+          ...mkTakeLinks(board, mkTake_(playerId))
+        }
+      });
+      break;
+
+    case opponentId:
+      ok(res, {
+        board,
+        _links: {
+          ...commonLinks,
+          ...placeholderLinks,
+          ...mkTakeLinks(board, mkTake_(opponentId))
+        },
+      });
+      break;
+
+    default:
+      res.status(500).send({ error: "This isn't supposed to happen…" });
+  }
 });
 
 app.get('/api/*', (_req, res) => {
