@@ -2,6 +2,7 @@
   import axios from 'axios';
 
   import type { Link } from './links';
+  import StateDisplay from './StateDisplay.svelte';
 
   export let entrypoint: Link;
   export let fillTemplate: (link: Link) => Link;
@@ -28,16 +29,17 @@
 <main>
   <h1>Tic Tac Toe</h1>
 
+  <StateDisplay {state} links={state?.['_links']} {fillTemplate} />
+
   {#each links as link}
     <div class="link-container">
       <a href={link.href}>{link.title}</a>
     </div>
   {/each}
 
-  <hr />
-
+  {#if state}
+  <hr/>
   <details open>
-    <!-- <summary>…</summary> -->
     <pre class="under-the-hood">{
       JSON.stringify(
         {
@@ -48,6 +50,8 @@
       )
     }</pre>
   </details>
+{/if}
+
 </main>
 
 <style>
@@ -64,18 +68,8 @@
     font-weight: 100;
   }
 
-  details {
-    margin-top: 20px;
-  }
-
   .link-container {
     margin-bottom: 20px;
-  }
-
-  .under-the-hood {
-    background: #EEE;
-    padding: 10px;
-    margin-top: 10px;
   }
 
   @media (min-width: 640px) {

@@ -8,6 +8,8 @@ import { ulid } from 'ulid'
 import { HasLinks, Link, Links, SansRel, _links } from './links';
 import requestSigning from './signing';
 
+import { spaces, Space, EmptySpace, emptySpace, PlayerId, Board } from '../shared/types';
+
 interface Req<T> extends express.Request { body: T }
 type Res<T> = express.Response<T, Record<string, any>>;
 function ok<T>(res: Res<T>, body: T) {
@@ -38,22 +40,6 @@ const reset: SansRel = {
   title: "I would like to start over from the beginning",
 }
 
-type PlayerId = 'X' | 'O';
-function getOpponentId(playerId: PlayerId) {
-  switch(playerId) {
-    case 'O':
-      return 'X';
-    case 'X':
-      return 'O';
-  }
-}
-
-type Game = {
-  gameId: string,
-  playerId: PlayerId,
-  opponentId: PlayerId,
-};
-
 app.get('/api', (_req: Req<void>, res: Res<HasLinks<'chooseX'|'chooseO'>>) => {
   ok(res, {
     ..._links({
@@ -73,7 +59,6 @@ app.get('/api', (_req: Req<void>, res: Res<HasLinks<'chooseX'|'chooseO'>>) => {
   });
 });
 
-// type NewGame = HasLinks<'start'|'yield'> & Game;
 app.get('/api/player/:playerId/games/new', (req: Req<void>, res: Res<HasLinks<'start'|'yield'>>) => {
   const gameId = ulid();
   const playerId = req.params.playerId as PlayerId; // 😬
@@ -100,13 +85,36 @@ app.get('/api/player/:playerId/games/new', (req: Req<void>, res: Res<HasLinks<'s
   });
 });
 
-const spaces = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
-type Space = typeof spaces[number];
+const wins =
+  // NOTE: There's probably some cool math that can figure this out instead,
+  // but it's such a small space that this is just fine.
+  [
+    // Horizontal
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    // Vertical
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    // Diagonal
+    [0, 4, 8],
+    [2, 4, 6]
+  ] as const;
+type Win = typeof wins[number]; // Not sure we actually need this.
 
-type EmptySpace = '_';
-const emptySpace: EmptySpace = '_';
+const isWinner = (spaces: Space[]) =>
+  wins.some(w => w.map(n => n as Space).every((space: Space) => spaces.includes(space)))
 
-type Board = Record<Space, (PlayerId | EmptySpace)>;
+export function getOpponentId(playerId: PlayerId) {
+  switch(playerId) {
+    case 'O':
+      return 'X';
+    case 'X':
+      return 'O';
+  }
+}
+
 const emptyBoard = () =>
   spaces.reduce(
     (board: Partial<Board>, space: Space) => {
@@ -116,14 +124,14 @@ const emptyBoard = () =>
     {}
   ) as Board;
 
-
-
-
 const mergeBoard = (base: Board) => (taken: Partial<Board>): Board => Object.assign({}, base, taken);
 const fillHoles = mergeBoard(emptyBoard());
 
 const getSpaces = (board: Board): Space[] => Object.keys(board).map(s => parseInt(s)) as Space[];
-const getEmptySpaces = (board: Board): Space[] => getSpaces(board).filter(s => board[s] === emptySpace);
+const chooseSpaces = (value: PlayerId | '_') => (board: Board) => getSpaces(board).filter(s => board[s] === value);
+
+const getTakenSpaces = (board: Board, playerId: PlayerId) => chooseSpaces(playerId)(board);
+const getEmptySpaces = chooseSpaces(emptySpace);
 
 function parseBoard(req: express.Request): Board {
   const taken_ = Object.assign({}, req.query.taken) as Record<string, PlayerId>;
@@ -178,6 +186,7 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
 
   const activePlayerId = req.query.active as PlayerId; // 😬
   const board = parseBoard(req);
+  const activePlayerHasWon = isWinner(getTakenSpaces(board, activePlayerId));
 
   const mkTake_ = mkTake(gameId, mergeBoard(board))
 
@@ -194,6 +203,16 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
       title: `=== Active player: ${activePlayerId} ===`
     },
   })._links
+  const activePlayerHasWonLink =
+    activePlayerHasWon
+      ? _links({
+        winPlaceholder: {
+          href: '#',
+          method: 'GET',
+          title: '=== Active player has won!!! ==='
+        },
+      })._links
+      : {};
 
   switch(activePlayerId) {
     case playerId:
