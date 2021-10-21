@@ -8,10 +8,8 @@
     "build-fe": "rollup -c",
     "dev": "echo 'Prefer `watch-frontend` or `watch-backend`' && exit 1",
     "start": "node dist/",
-
     "watch-frontend": "rollup -c -w",
     "watch-backend": "tsc -p src/server & nodemon src/server",
-
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
@@ -22,6 +20,7 @@
     "@types/cors": "^2.8.12",
     "@types/crypto-js": "^4.0.2",
     "@types/express": "^4.17.13",
+    "@types/uri-templates": "^0.1.31",
     "nodemon": "^2.0.13",
     "rollup": "^2.3.4",
     "rollup-plugin-css-only": "^3.1.0",

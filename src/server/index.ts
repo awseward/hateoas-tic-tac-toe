@@ -8,7 +8,7 @@ import { ulid } from 'ulid'
 import { HasLinks, Link, Links, SansRel, _links } from './links';
 import requestSigning from './signing';
 
-import { spaces, Space, EmptySpace, emptySpace, PlayerId, Board } from '../shared/types';
+import { spaces, Space, EmptySpace, emptySpace, PlayerId, Board, TakeLinks } from '../shared/types';
 
 interface Req<T> extends express.Request { body: T }
 type Res<T> = express.Response<T, Record<string, any>>;
@@ -128,7 +128,7 @@ const mergeBoard = (base: Board) => (taken: Partial<Board>): Board => Object.ass
 const fillHoles = mergeBoard(emptyBoard());
 
 const getSpaces = (board: Board): Space[] => Object.keys(board).map(s => parseInt(s)) as Space[];
-const chooseSpaces = (value: PlayerId | '_') => (board: Board) => getSpaces(board).filter(s => board[s] === value);
+const chooseSpaces = (value: PlayerId | EmptySpace) => (board: Board) => getSpaces(board).filter(s => board[s] === value);
 
 const getTakenSpaces = (board: Board, playerId: PlayerId) => chooseSpaces(playerId)(board);
 const getEmptySpaces = chooseSpaces(emptySpace);
@@ -169,7 +169,6 @@ const mkTake =
   }
 };
 
-type TakeLinks = Partial<Links<'take0'|'take1'|'take2'|'take3'|'take4'|'take5'|'take6'|'take7'|'take8'>>
 const mkTakeLinks = (board: Board, mkTakeLink: (space: Space) => Link) =>
   getEmptySpaces(board).reduce(
     (links: TakeLinks, space) => Object.assign(links, { [`take${space}`]: mkTakeLink(space) }),
@@ -217,11 +216,14 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
   switch(activePlayerId) {
     case playerId:
       ok(res, {
-        board,
+        board: {
+          _links: { ...mkTakeLinks(board, mkTake_(playerId)) },
+          ...board,
+        },
         _links: {
           ...commonLinks,
           ...placeholderLinks,
-          ...mkTakeLinks(board, mkTake_(playerId))
+          ...activePlayerHasWonLink,
         }
       });
       break;
@@ -232,7 +234,7 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
         _links: {
           ...commonLinks,
           ...placeholderLinks,
-          ...mkTakeLinks(board, mkTake_(opponentId))
+          ...activePlayerHasWonLink,
         },
       });
       break;

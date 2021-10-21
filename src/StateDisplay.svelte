@@ -1,17 +1,23 @@
 <script lang="ts">
   import type { Link } from './links';
-  import { Board, getSpaces, isEmpty, Space } from "./shared/types";
+  import { Board, emptySpace, EmptySpace, getSpaces, isEmpty, PlayerId, Space, TakeLinks } from "./shared/types";
 
   export let state: any;
-  export let links: { [key: string]: Link };
+  export let links: TakeLinks;
   export let fillTemplate: (link: Link) => Link;
-
-  const spaceLink = (space: Space) =>
-    fillTemplate(links[`take${space}`]);
 
   let board: Board;
   let rows: Space[][];
   let cols = [0, 1, 2] as const;
+
+  const spaceLink = (space: Space) : Link | undefined =>
+    fillTemplate(links[`take${space}`]);
+
+  const spaceChar = (space: Space) : (PlayerId | EmptySpace) =>
+    isEmpty(board)(space) ? board[space] : emptySpace;
+
+  const isPlayable = (space: Space) =>
+    !!board['_links'][`choose${space}`];
 
   $: {
     const b = state?.['board'];
@@ -34,9 +40,13 @@
         {#each cols as col (`col-${col}`)}
           <td>
             {#if isEmpty(board)(row[col])}
-              <a href={spaceLink(row[col]).href}>☐</a>
+              {#if isPlayable(row[col])}
+                <a href={spaceLink(row[col]).href}>spaceChar(row[col])</a>
+              {:else}
+                spaceChar(row[col])
+              {/if}
             {:else}
-              {board[row[col]]}
+              {spaceChar(row[col])}
             {/if}
           </td>
         {/each}
