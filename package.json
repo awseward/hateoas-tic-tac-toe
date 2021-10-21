@@ -7,7 +7,7 @@
     "build": "rollup -c && tsc -p src/server",
     "build-fe": "rollup -c",
     "dev": "echo 'Prefer `watch-frontend` or `watch-backend`' && exit 1",
-    "start": "node dist/",
+    "start": "node dist/server",
     "watch-frontend": "rollup -c -w",
     "watch-backend": "tsc -p src/server & nodemon src/server",
     "check": "svelte-check --tsconfig ./tsconfig.json"

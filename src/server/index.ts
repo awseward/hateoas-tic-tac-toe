@@ -190,18 +190,6 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
   const mkTake_ = mkTake(gameId, mergeBoard(board))
 
   const commonLinks = _links({ reset })._links;
-  const placeholderLinks = _links({
-    boardPlaceholder: {
-      href: '#',
-      method: 'GET',
-      title: '=== Pretend there is a board rendered here ==='
-    },
-    statusPlaceholder: {
-      href: '#',
-      method: 'GET',
-      title: `=== Active player: ${activePlayerId} ===`
-    },
-  })._links
   const activePlayerHasWonLink =
     activePlayerHasWon
       ? _links({
@@ -222,7 +210,11 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
         },
         _links: {
           ...commonLinks,
-          ...placeholderLinks,
+          turnStatusPlaceholder: {
+            href: '#',
+            method: 'GET',
+            title: '=== It is your turn ==='
+          },
           ...activePlayerHasWonLink,
         }
       });
@@ -233,7 +225,11 @@ app.get('/api/player/:playerId/game/:gameId', (req: Req<void>, res: Res<any>) =>
         board,
         _links: {
           ...commonLinks,
-          ...placeholderLinks,
+          turnStatusPlaceholder: {
+            href: '#',
+            method: 'GET',
+            title: "=== It is your opponent's turn ==="
+          },
           ...activePlayerHasWonLink,
         },
       });
@@ -249,7 +245,7 @@ app.get('/api/*', (_req, res) => {
 })
 
 app.get('*', (_req, res) => {
-   res.sendFile(path.resolve(__dirname, '..', 'public', 'index.html'));
+   res.sendFile(path.resolve(__dirname, '../..', 'public', 'index.html'));
 });
 
 app.listen(port, () => console.log(`Running on port ${port}`));

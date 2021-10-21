@@ -2,7 +2,7 @@
   import axios from 'axios';
 
   import type { Link } from './links';
-  import StateDisplay from './StateDisplay.svelte';
+  import StateDisplay from './BoardComponent.svelte';
 
   export let entrypoint: Link;
   export let fillTemplate: (link: Link) => Link;
@@ -29,7 +29,7 @@
 <main>
   <h1>Tic Tac Toe</h1>
 
-  <StateDisplay {state} links={state?.['_links']} {fillTemplate} />
+  <StateDisplay {state} {fillTemplate} />
 
   {#each links as link}
     <div class="link-container">
